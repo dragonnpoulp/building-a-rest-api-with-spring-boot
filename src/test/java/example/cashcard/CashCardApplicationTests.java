@@ -1,125 +1,119 @@
 package example.cashcard;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 
-@AutoConfigureWebTestClient
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.*;
+import org.springframework.test.annotation.DirtiesContext;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import org.hamcrest.Matchers;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+
+@AutoConfigureMockMvc
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CashCardApplicationTests {
     @Autowired
-    WebTestClient restClient;
+    MockMvc mockMvc;
 
-    @Test
-    void shouldReturnACashCardWhenDataIsSaved() {
-        var cashCard = restClient.get()
-                .uri("/cashcards/99")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(CashCard.class)
-                .returnResult()
-                .getResponseBody();
-        assertThat(cashCard.id()).isEqualTo(99);
-        assertThat(cashCard.amount()).isEqualTo(123.45);
+    private static RequestPostProcessor sarahAuth() {
+        return httpBasic("sarah1", "abc123");
     }
 
     @Test
-    void shouldNotReturnACashCardWithAnUnknownId() {
-        restClient.get().uri("/cashcards/1000").exchange().expectStatus().isNotFound();
+    void shouldReturnACashCardWhenDataIsSaved() throws Exception {
+        mockMvc.perform(
+                get("/cashcards/99").with(sarahAuth()))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.id").value(99),
+                        jsonPath("$.amount").value(123.45));
+    }
+
+    @Test
+    void shouldNotReturnACashCardWithAnUnknownId() throws Exception {
+        mockMvc.perform(get("/cashcards/1000").with(sarahAuth()))
+                .andExpect(status().isNotFound());
     }
 
     @Test
     @DirtiesContext
-    void shouldCreateANewCashCard() {
-        var newCashCard = new CashCard(null, 250.00);
-        var location = restClient.post()
-                .uri("/cashcards")
-                .bodyValue(newCashCard)
-                .exchange()
-                .expectStatus().isCreated()
-                .expectHeader().exists("location")
-                .returnResult()
-                .getResponseHeaders()
-                .getLocation();
+    void shouldCreateANewCashCard() throws Exception {
+        var location = mockMvc.perform(
+                post("/cashcards")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(sarahAuth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 250.0}"))
+                .andExpect(status().isCreated())
+                .andExpect(header().exists("location"))
+                .andReturn()
+                .getResponse()
+                .getHeader("location");
 
-        var savedCashCard = restClient.get()
-                .uri(location)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(CashCard.class)
-                .returnResult()
-                .getResponseBody();
-
-        assertThat(savedCashCard).isNotNull();
-        assertThat(savedCashCard.id()).isNotNull();
-        assertThat(savedCashCard.amount()).isEqualTo(250.00);
+        mockMvc.perform(
+                get(location)
+                        .with(sarahAuth()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.amount").value(250));
     }
 
     @Test
-    void shouldReturnAllCashCardsWhenListIsRequired() {
-        var cards = restClient.get()
-                .uri("/cashcards").exchange()
-                .expectStatus().isOk()
-                .expectBodyList(CashCard.class)
-                .returnResult().getResponseBody();
-
-        assertThat(cards).hasSize(3);
-        assertThat(cards).extracting(CashCard::id).containsExactlyInAnyOrder(99L, 100L, 101L);
+    void shouldReturnAllCashCardsWhenListIsRequired() throws Exception {
+        mockMvc.perform(get("/cashcards").with(sarahAuth()))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.length()").value(3),
+                        jsonPath("$[*].id").value(Matchers.containsInAnyOrder(99, 100, 101)));
     }
 
     @Test
-    void shouldReturnAPageOfCashCards() {
-        var cards = restClient.get()
-                .uri("/cashcards?page=0&size=1")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(CashCard.class)
-                .returnResult()
-                .getResponseBody();
-        assertThat(cards).hasSize(1);
+    void shouldReturnAPageOfCashCards() throws Exception {
+        mockMvc.perform(get("/cashcards?page=0&size=1").with(sarahAuth()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     @Test
-    void shouldReturnADescSortedPageOfCashCards() {
-        var cards = restClient.get()
-                .uri("/cashcards?page=0&size=1&sort=amount,desc")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(CashCard.class)
-                .returnResult()
-                .getResponseBody();
-        assertThat(cards).hasSize(1);
-        assertThat(cards.get(0).amount()).isEqualTo(150.0);
+    void shouldReturnADescSortedPageOfCashCards() throws Exception {
+        mockMvc
+                .perform(get("/cashcards?page=0&size=1&sort=amount,desc").with(sarahAuth()))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.length()").value(1),
+                        jsonPath("$[0].amount").value(150));
     }
 
     @Test
-    void shouldReturnAAscSortedPageOfCashCards() {
-        var cards = restClient.get()
-                .uri("/cashcards?page=0&size=1&sort=amount,asc")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(CashCard.class)
-                .returnResult()
-                .getResponseBody();
-        assertThat(cards).hasSize(1);
-        assertThat(cards.get(0)).hasFieldOrPropertyWithValue("amount", 1.0);
+    void shouldReturnAAscSortedPageOfCashCards() throws Exception {
+        mockMvc
+                .perform(get("/cashcards?page=0&size=1&sort=amount,asc").with(sarahAuth()))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.length()").value(1),
+                        jsonPath("$[0].amount").value(1));
     }
 
     @Test
-    void shouldReturnASortedPageOfCashCardWithNoParameters() {
-        var cards = restClient.get()
-                .uri("/cashcards")
-                .exchange()
-                .expectStatus().isOk()
-                .expectBodyList(CashCard.class)
-                .returnResult()
-                .getResponseBody();
-        assertThat(cards).hasSize(3);
-        assertThat(cards.get(0)).hasFieldOrPropertyWithValue("amount", 1.0);
+    void shouldReturnASortedPageOfCashCardWithNoParameters() throws Exception {
+        mockMvc
+                .perform(get("/cashcards").with(sarahAuth()))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.length()").value(3),
+                        jsonPath("$[0].amount").value(1));
+    }
+
+    @Test
+    void shouldRejectUsersWhoAreNotCardOwners() throws Exception {
+        mockMvc.perform(get("/cashcards/99").with(httpBasic("hank", "abc123")))
+                .andExpect(status().isNotFound());
     }
 }

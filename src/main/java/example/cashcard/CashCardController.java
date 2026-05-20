@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
+import java.security.Principal;
 import java.util.*;
 
 @RestController
@@ -20,8 +21,8 @@ class CashCardController {
     }
 
     @GetMapping("/{requestedId}")
-    private ResponseEntity<CashCard> findById(@PathVariable Long requestedId) {
-        Optional<CashCard> cashCardOptional = cashCardRepository.findById(requestedId);
+    private ResponseEntity<CashCard> findById(@PathVariable Long requestedId, Principal principal) {
+        Optional<CashCard> cashCardOptional = cashCardRepository.findByIdAndOwner(requestedId, principal.getName());
         if (cashCardOptional.isPresent()) {
             return ResponseEntity.ok(cashCardOptional.get());
         } else {
@@ -29,9 +30,11 @@ class CashCardController {
         }
     }
 
-    @PostMapping
-    private ResponseEntity<Void> createCashCard(@RequestBody CashCard newCashCardRequest, UriComponentsBuilder ucb) {
-        CashCard savedCashCard = cashCardRepository.save(newCashCardRequest);
+    @PostMapping()
+    private ResponseEntity<Void> createCashCard(@RequestBody CashCard newCashCardRequest, UriComponentsBuilder ucb,
+            Principal principal) {
+        var newCashCard = new CashCard(null, newCashCardRequest.amount(), principal.getName());
+        CashCard savedCashCard = cashCardRepository.save(newCashCard);
         URI locationOfNewCashCard = ucb
                 .path("cashcards/{id}")
                 .buildAndExpand(savedCashCard.id())
@@ -41,8 +44,8 @@ class CashCardController {
 
     @GetMapping()
     public ResponseEntity<List<CashCard>> findAll(
-            @SortDefault(sort = "amount", direction = Direction.ASC) Pageable pageable) {
-        var cardsPage = cashCardRepository.findAll(pageable);
+            @SortDefault(sort = "amount", direction = Direction.ASC) Pageable pageable, Principal principal) {
+        var cardsPage = cashCardRepository.findByOwner(principal.getName(), pageable);
         return ResponseEntity
                 .ok(cardsPage.getContent());
     }
