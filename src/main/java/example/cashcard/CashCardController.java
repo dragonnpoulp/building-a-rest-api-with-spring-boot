@@ -50,4 +50,15 @@ class CashCardController {
                 .ok(cardsPage.getContent());
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<Void> putCashCard(@PathVariable Long id, @RequestBody CashCard value, Principal principal) {
+        String owner = principal.getName();
+        return cashCardRepository.findByIdAndOwner(id, owner)
+                .map(existing -> {
+                    var updatedCashCard = new CashCard(existing.id(), value.amount(), owner);
+                    cashCardRepository.save(updatedCashCard);
+                    return ResponseEntity.noContent().<Void>build();
+                })
+                .orElseGet(() -> ResponseEntity.notFound().<Void>build());
+    }
 }

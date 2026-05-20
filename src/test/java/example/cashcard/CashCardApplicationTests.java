@@ -116,4 +116,45 @@ class CashCardApplicationTests {
         mockMvc.perform(get("/cashcards/99").with(httpBasic("hank", "abc123")))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void shouldUpdateExistingCashCard() throws Exception {
+        mockMvc.perform(
+                put("/cashcards/99")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(sarahAuth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":19.99}"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(
+                get("/cashcards/99")
+                        .with(sarahAuth()))
+                .andExpectAll(
+                        status().isOk(),
+                        jsonPath("$.id").value(99),
+                        jsonPath("$.amount").value(19.99));
+    }
+
+    @Test
+    void shouldNotUpdateACashCardThatDoesNotExist() throws Exception {
+        mockMvc.perform(
+                put("/cashcards/99999")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(sarahAuth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":19.99}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldNotUpdateACashCardThatIsOwnedBySomeoneElse() throws Exception {
+        mockMvc.perform(
+                put("/cashcards/102")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(sarahAuth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":19.99}"))
+                .andExpect(status().isNotFound());
+    }
 }
