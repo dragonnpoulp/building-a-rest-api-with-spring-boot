@@ -43,6 +43,11 @@ public class CashCardSecurityConfig {
                 .password(passwordEncoder.encode("abc123"))
                 .roles("NON-OWNER")
                 .build();
-        return new InMemoryUserDetailsManager(sarah, hank);
+        UserDetails kumar = users
+                .username("kumar2")
+                .password(passwordEncoder.encode("abc123"))
+                .roles("CARD-OWNER")
+                .build();
+        return new InMemoryUserDetailsManager(sarah, hank, kumar);
     }
 }

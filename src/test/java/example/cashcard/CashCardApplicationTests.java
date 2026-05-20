@@ -118,7 +118,7 @@ class CashCardApplicationTests {
     }
 
     @Test
-    void shouldUpdateExistingCashCard() throws Exception {
+    void shouldUpdateAnExistingCashCard() throws Exception {
         mockMvc.perform(
                 put("/cashcards/99")
                         .with(SecurityMockMvcRequestPostProcessors.csrf())
@@ -156,5 +156,44 @@ class CashCardApplicationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"amount\":19.99}"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DirtiesContext
+    void shouldDeleteAnExistingCashCard() throws Exception {
+        mockMvc.perform(
+                delete("/cashcards/99")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(sarahAuth()))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(
+                get("/cashcards/99")
+                        .with(sarahAuth()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shoudNotDeleteACashCardThatDoesNotExist() throws Exception {
+        mockMvc.perform(
+                delete("/cashcards/99999")
+                        .with(csrf())
+                        .with(sarahAuth()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldNotAllowDeletionOfCashCardsTheyDoNotOwn() throws Exception {
+        mockMvc.perform(
+                delete("/cashcards/102")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(sarahAuth()))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(
+                delete("/cashcards/102")
+                        .with(SecurityMockMvcRequestPostProcessors.csrf())
+                        .with(httpBasic("kumar2", "abc123")))
+                .andExpect(status().isNoContent());
     }
 }
